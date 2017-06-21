@@ -1,6 +1,7 @@
 # @Author: DJ Rajdev
 # @Purpose: R scripts from R graphics cookbook
-# @Packages: dplyr, gcookbook, ggplot2
+#    hexbin (stat_bin), MASS (biopsy)
+# @Packages: dplyr, gcookbook, ggplot2, reshape2
 
 # Set up workspace
 #-----------------
@@ -10,8 +11,8 @@
 # setwd(file.path(getwd(),'Desktop','code','R'))
 
 ## Chapter 2
-library(ggplot2)
 # Scatter: equivalent
+library(ggplot2)
 qplot(mtcars$wt, mtcars$mpg)
 qplot(wt, mpg, data=mtcars)
 ggplot(mtcars, aes(x=wt, y=mpg))+ geom_point()
@@ -366,10 +367,297 @@ ggplot(diamonds, aes(x=carat, y=price)) + geom_point(alpha=.1)
 ggplot(diamonds, aes(x=carat, y=price)) + geom_point(alpha=.01)
 
 # binning the points 
-
+library(hexbin)
 sp <- ggplot(diamonds, aes(x=carat, y=price))
+sp + stat_bin2d()
+sp + stat_bin2d(bins =100) + scale_fill_gradient(low='lightblue', high='red')
+sp + stat_bin2d(bins =100) + 
+  scale_fill_gradient(low='lightblue', high='red', limits= c(0,8000))
+
+sp + stat_binhex() + scale_fill_gradient(low='gray', high ='red', limits=c(0,4000))
+# breaks:
+sp + stat_binhex() + 
+  scale_fill_gradient(low='lightblue', high ='red', limits=c(0,4000), 
+                      breaks=c(0, 100, 250, 500, 1000, 2000, 3000))
+
+# introduce jitter
+sp1 <- ggplot(ChickWeight, aes(x=Time, y=weight))
+sp1 + geom_point(position = 'jitter')
+sp1 + geom_jitter()
+sp1 + geom_point(position= position_jitter(height = 0, width =.5))
+
+# continuous on y, discrete/ factor on x use box plot
+sp1 + geom_boxplot() # doesn't know how to group
+sp1 + geom_boxplot(aes(group=Time))
+
+# Adding fitted regression model lines to scatter plot
+# save the base plot and then add elements
+sp <- ggplot(heightweight, aes(x=ageYear, y=heightIn))
+sp + geom_point() + stat_smooth(method='lm')
+
+# by default uses confidenceinterval of 95%, to disable or change it:
+sp + geom_point() + stat_smooth(method ='lm', se=FALSE)
+sp + geom_point() + stat_smooth(method ='lm', level=.99)
+
+# change plot attributes
+sp + geom_point(color='grey60') + geom_smooth(method='lm', color ='darkblue', se=F)
+library(MASS)
+
+# adding loess smoothing
+sp + geom_point(color='grey60') + stat_smooth() # default is loess
+b <- biopsy
+b$classn[b$class =='benign'] <- 0
+b$classn[b$class =='malignant'] <- 1
+
+ggplot(b, aes(x=V1, y=classn)) + 
+  geom_point(shape=21, alpha=.4, size=1.5, 
+             position=position_jitter(width=.3, height=.06)) +
+  stat_smooth(method=glm, method.args=list(family=binomial))
+
+# group by factor
+sps <- ggplot(heightweight, aes(x=ageYear, y=heightIn, color=sex)) + 
+  geom_point(alpha=.4) +
+  scale_fill_brewer(palette='Set1')
+sps+geom_smooth(level=.90)
+# blue doesn't extend to the end because loess doesnt allow extrapolation
+
+sps + geom_smooth(method=lm, fullrange=T, se=F)
+
+# plotting self created model for stat_smooth()
+model <- lm(heightIn ~ ageYear + I(ageYear^2), heightweight)
+model
+
+xmin <- min(heightweight$ageYear)
+xmax <- max(heightweight$ageYear)
+predicted <- data.frame(ageYear = seq(xmin, xmax, length.out = 100))
+predicted$heightIn <- predict(model, predicted)
+head(predicted)
+
+sp <- ggplot(heightweight, aes(x=ageYear, y=heightIn)) + geom_point(color='grey40')
+sp + geom_line(data=predicted, size=1)
+
+# predictvals function to quicken the process
+predictvals <- function(model, xvar, yvar, xrange=NULL, samples=100, ...) {
+  if(is.null(xrange)) {
+    if(class(model) %in% c('lm', 'glm')) {
+      xrange <- range(model$model[[xvar]])
+    }
+    else if(class(model) %in% c('loess')) {
+      xrange <- range(model$x)
+    }
+  }
+    newdata <- data.frame(x=seq(xrange[1], xrange[2], length.out =samples))
+    names(newdata) <- xvar
+    newdata$yvar <- predict(model, newdata=newdata, ...)
+    names(newdata) <- c(xvar, yvar)
+    newdata
+}
+
+modelinear <- lm(heightIn ~ ageYear, heightweight)
+modloess <- loess(heightIn ~ ageYear, heightweight)
+lmpredicted <- predictvals(modelinear, 'ageYear', 'heightIn')
+loesspredicted <- predictvals(modloess, 'ageYear', 'heightIn')
 
 
+sp+geom_line(data=lmpredicted, color='red', size=.8) +
+  geom_line(data=loesspredicted, color='blue', size=.8)
+
+# passing type= response to non linear link function in predictvals
+fitlogistic <- glm(classn ~ V1, b, family = binomial)
+glmpredicted <- predictvals(fitlogistic, 'V1', 'classn', type='response')
+
+ggplot(b, aes(x=V1, y=classn)) +
+  geom_point(position='jitter', size=1.5, alpha=.4) +
+  geom_line(data=glmpredicted, color='blue') +
+  stat_smooth(method=glm, method.args = list(family=binomial), color='red', se=F)
+
+# make model on subset & fit line to it
+make_model <- function(data) {
+  lm(heightIn ~ ageYear, data)
+}
+
+models <- dlply(heightweight, .(sex), make_model)
+predicted <- lapply(models, FUN =predictvals, xvar='ageYear', yvar='heightIn')
+for( sex in names(predicted)) {
+  predicted[[sex]]$sex <- rep(sex, length.out = nrow(predicted[[sex]]))
+}
+ggplot(heightweight, aes(x=ageYear, y=heightIn, color=sex)) + geom_point() +
+  geom_line(data=predicted[[1]]) + geom_line(data=predicted[[2]])
+
+# Adding annotations with model coefficients
+model <- lm(heightIn ~ ageYear, heightweight)
+pred <- predictvals(model, 'ageYear', 'heightIn')
+sp <- ggplot(heightweight, aes(x=ageYear, y=heightIn)) + geom_point() +
+  geom_line(data=pred)
+sp + annotate(geom='text', x=16.5, y=52,
+              label=paste('R sq =', round(summary(model)$r.squared, 3)))
+# evaluate formula
+sp + annotate(geom='text', x=16.5, y=52,
+              label=paste('R^2 ==', round(summary(model)$r.squared, 3)), parse=T)
+
+# check validity of formula by wrapping in expression()
+eqn <- as.character(as.expression(substitute(
+  italic(y) == a + b*italic(x)*','~~italic(r)^2 ~ '=' ~r2,
+  list( a= format(coef(model)[1], digits=3),
+        b= format(coef(model)[2], digits=3),
+        r2 = format(summary(model)$r.squared, digits=2))
+)))
+
+sp + annotate('text', label=eqn, parse = T, x=Inf, y=-Inf, hjust=1.1, vjust=-.5, size=6)
+
+## adding rugs to plot
+ggplot(faithful, aes(x=eruptions, y=waiting)) + geom_point() + geom_rug()
+ggplot(faithful, aes(x=eruptions, y=waiting)) + geom_point() + 
+  geom_rug(position='jitter', size=.5)
+
+sp <- ggplot(subset(countries, Year==2009 & healthexp>2000), 
+             aes(x=healthexp, y=infmortality))
+sp + geom_point() + annotate('text', x=4350, y=5.4, label='Canada') +
+  annotate('text', x=7600, y=6.6, label='USA')
+
+# automatic labeling
+sp + geom_point() + geom_text(aes(label=Name), size=4)
+# add vertical justifciation
+sp + geom_point() + geom_text(aes(label=Name), size=4, vjust=1.5)
+# left justify labels 
+sp + geom_point() + geom_text(aes(label=Name), size=4, hjust=0)
+sp + geom_point() + geom_text(aes(label=Name), size=4, hjust=1)
+# fix overlap by adding to x
+sp+geom_point() + geom_text(aes(label=Name, x=healthexp+100), size=4, hjust=0)
+
+# selective labels
+cdat <- subset(countries, Year ==2009 & healthexp>2000)
+cdat$Name1 <- cdat$Name
+tmp <- cdat$Name1 %in% c('United States', 'Canada', 'Denmark', 'Spain', 'Japan', 'Netherlands')
+cdat$Name1[!tmp] <- NA
+
+sp1 <- ggplot(cdat, aes(x=healthexp, y=infmortality)) + geom_point()
+sp1 + geom_text(aes(label=Name1, x=healthexp+100), size=4, hjust=0) +
+  xlim(2000,10000)
+
+# bubble plot
+
+cdat <- subset(countries, Year ==2009 & healthexp>2000 &
+                        Name %in% c('United States', 'Canada', 
+                                     'Denmark', 'Spain', 'Japan', 'Netherlands'))
+p <- ggplot(cdat, aes(x=healthexp, y=infmortality, size= GDP)) + 
+  geom_point(shape=21, color='black', fill='cornsilk')
+p
+# size maps to radius of point, doubling the mapping = 4*area so use sclae size
+p + scale_size_area(max_size=15)
 
 
+# display value on a grid of cat or continuous
+hec <- HairEyeColor[,,'Male'] + HairEyeColor[,,'Female']
+# unpivot 
+library(reshape2)
+hec <- melt(hec, value.name = 'count')
+ggplot(hec, aes(x=Eye, y=Hair)) +geom_point(aes(size=count), color='black', 
+                                            fill='cornsilk', shape=21) + 
+  scale_size_area(max_size=20, guide=F) +
+  geom_text(aes(label=count, y=as.numeric(Hair)-sqrt(count)/22),
+            vjust=1, color='grey60')
+# y = numeric hair positions at gridline, sqrt count brings below radius, 22 is arbit
+
+# pairs plot 
+c2009 <- subset(countries, Year=='2009', select = c(1, 4:7))
+pairs(c2009[,2:5])
+
+# pairs.cor & panel.hist from pairs() help page
+# ggpairs() from ggally is better
+
+panel.hist <- function(x, ...)
+{
+  usr <- par("usr"); on.exit(par(usr))
+  par(usr = c(usr[1:2], 0, 1.5) )
+  h <- hist(x, plot = FALSE)
+  breaks <- h$breaks; nB <- length(breaks)
+  y <- h$counts; y <- y/max(y)
+  rect(breaks[-nB], 0, breaks[-1], y, col = "cyan", ...)
+}
+panel.cor <- function(x, y, digits = 2, prefix = "", cex.cor, ...)
+{
+  usr <- par("usr"); on.exit(par(usr))
+  par(usr = c(0, 1, 0, 1))
+  r <- abs(cor(x, y))
+  txt <- format(c(r, 0.123456789), digits = digits)[1]
+  txt <- paste0(prefix, txt)
+  if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+  text(0.5, 0.5, txt, cex = cex.cor * r)
+}
+pairs(c2009[2:5], upper.panel = panel.cor,
+      diag.panel = panel.hist,
+      lower.panel= panel.smooth)
+
+
+## Chapter 6 Summarize data distributions
+# basic histogram
+ggplot(faithful, aes(x=waiting)) + geom_histogram()
+# working with column
+W <- faithful$waiting
+ggplot(NULL, aes(x=W)) + geom_histogram()
+
+# setting binwidth
+ggplot(faithful, aes(x=waiting)) + 
+  geom_histogram(binwidth=5, color='black', fill='white')
+# divide into 15 bins
+ggplot(faithful, aes(x=waiting)) + 
+  geom_histogram(bins=15, color='black', fill='white')
+# OR
+binsize <- diff(range(faithful$waiting))/15
+ggplot(faithful, aes(x=waiting)) +
+  geom_histogram(binwidth=binsize, color='black', fill='white')
+
+# shift origin
+ggplot(faithful, aes(x=waiting)) +
+  geom_histogram(binwidth=binsize, color='black', fill='white') +
+  xlim(0,max(faithful$waiting))
+
+# facets!
+# library(MASS)
+ggplot(birthwt, aes(x=bwt)) + geom_histogram(color='black', fill='white') +
+  facet_grid(smoke~.)
+# change value names
+birthwt$smoke <- revalue(factor(birthwt$smoke), replace=c('0'='No Smoke', '1' = 'Smoke'))
+ggplot(birthwt, aes(x=bwt)) + geom_histogram(color='black', fill='white') +
+  facet_grid(smoke~.)
+
+# different scales in hist, use multiple scales by scale=free
+ggplot(birthwt, aes(x=bwt)) + geom_histogram(color='black', fill='white') +
+  facet_grid(race ~ .)
+ggplot(birthwt, aes(x=bwt)) + geom_histogram(color='black', fill='white') +
+  facet_grid(race ~ ., scales = 'free')
+
+# alternative to facet, send grouping var to fill (char or factor)
+ggplot(birthwt, aes(x=bwt, fill=factor(smoke))) + 
+  geom_histogram(position='identity',alpha=.4)
+
+# density curve
+ggplot(faithful, aes(x=waiting)) +geom_density()
+# to avoid enclosure
+ggplot(faithful, aes(x=waiting)) + geom_line(stat='density') + expand_limits(y=0)
+
+# density is found by adjusting kernel bandwidth of underlying sample
+ggplot(faithful, aes(x=waiting)) + 
+  geom_line(adjust=.25, color='red', stat='density') +
+  geom_line(adjust=1, stat='density') +
+  geom_line(adjust=2, color='blue', stat='density')
+
+# density hist overlay
+ggplot(faithful, aes(x=waiting)) + geom_histogram(fill='white', color='black') + 
+  geom_line(stat='density', color='red')
+# not density is between 0 to 1 so histogram needs to be scaled
+ggplot(faithful, aes(x=waiting, y = ..density..)) + 
+  geom_histogram(fill='white', color='grey50') + 
+  geom_line(stat='density', color='red', size=1.3) +
+  geom_line(stat='density', color='orange', size=1.3, adjust=.25)
+
+# color fill in density
+ggplot(faithful, aes(x=waiting)) + 
+  geom_density(fill='blue', color='NA', alpha=.2) + geom_line(stat='density')
+
+# multiple density curves
+birthwt$smoke <- factor(birthwt$smoke)
+ggplot(birthwt, aes(x=bwt, color=smoke)) + geom_line(stat='density')
+ggplot(birthwt, aes(x=bwt, fill=smoke)) +geom_density(color=NA, alpha=.3) 
 
