@@ -661,3 +661,170 @@ birthwt$smoke <- factor(birthwt$smoke)
 ggplot(birthwt, aes(x=bwt, color=smoke)) + geom_line(stat='density')
 ggplot(birthwt, aes(x=bwt, fill=smoke)) +geom_density(color=NA, alpha=.3) 
 
+# facets with density & histogram
+ggplot(birthwt, aes(x=bwt, y=..density..)) +
+  geom_histogram(color='grey60', fill='cornsilk') +
+  geom_line(stat='density') + facet_grid(smoke~.)
+
+# Frequency polygons
+ggplot(faithful, aes(x=waiting)) + geom_freqpoly(binwidth=4)
+ggplot(faithful, aes(x=waiting)) + geom_freqpoly(bins=30)
+
+# box plot
+ggplot(birthwt, aes(x=factor(race), y=bwt)) + geom_boxplot(width=.5)
+ggplot(birthwt, aes(x=factor(race), y=bwt)) + # default size =2, shape =16
+  geom_boxplot(width=.5, outlier.size = 1, outlier.shape = 21)
+# single element box plot, arbitrary x
+ggplot(birthwt, aes(x=1, y=bwt)) + geom_boxplot(width=.25) + 
+  scale_x_continuous(breaks = NULL) + theme(axis.title.x = element_blank())
+
+# add markers to box plot
+ggplot(birthwt, aes(x=factor(race), y=bwt)) + geom_boxplot() +
+  stat_summary(geom='point', shape=23, fun.y = mean, size=5, fill='blue')
+
+# violin plots
+p <- ggplot(heightweight, aes(x=sex, y=heightIn))
+p+geom_violin()
+# adding tails and aesthetics
+p + geom_violin(trim=F) + geom_boxplot(width=.05, fill='black') +
+  stat_summary(fun.y=median, color='white', shape=16, size=3, geom='point')
+
+# with smoothing
+p + geom_violin(adjust=2)
+p + geom_violin(adjust=.25)
+
+# making Wilkinson dot plot
+countries2009 <- subset(countries, Year==2009 & healthexp > 2000)
+p <- ggplot(countries2009, aes(x=infmortality))
+p + geom_dotplot()
+# clean up meaninglyess y axis, add data rug
+p + geom_dotplot() + geom_rug() + scale_y_continuous(breaks=NULL) +
+  theme(axis.title.y = element_blank())
+
+# equal spaced sot plots
+p + geom_dotplot(method='histodot', binwidth=.25) + geom_rug() + 
+  scale_y_continuous(breaks=NULL) + theme(axis.title.y = element_blank())
+
+# vertical symmetry
+p + geom_dotplot(stackdir='center', binwidth = .25) + geom_rug() + 
+  scale_y_continuous(breaks=NULL) + theme(axis.title.y = element_blank())
+p + geom_dotplot(stackdir='centerwhole', binwidth = .25) + geom_rug() + 
+  scale_y_continuous(breaks=NULL) + theme(axis.title.y = element_blank())
+
+# multigroup dot plot
+ggplot(heightweight, aes(x=sex, y=heightIn)) + 
+  geom_dotplot(stackdir='center', binwidth=.25, binaxis='y')
+
+# density plot
+p <- ggplot(faithful, aes(x=waiting, y=eruptions))
+p+geom_point() + stat_density2d()
+p + stat_density2d(aes(color=..level..))
+# density estimate to fill color
+p+stat_density2d(aes(fill=..density..), geom='raster', contour=F)
+p+ geom_point() +
+  stat_density2d(aes(alpha=..density..), geom='tile', contour=F)
+# raster renders more efficiently than tile
+
+## Chapter 7: Annotations
+p <- ggplot(faithful, aes(x=eruptions, y=waiting))  + geom_point()
+p + annotate('text', x=3, y=48, label='Group 1') +
+  annotate('text', x=4.5, y=66, label='Group2')
+
+# geom_text creates many text objects, single labels are better with annotate
+
+p + geom_point() + 
+  annotate('text',x =3, y=48, label ='Group1', family = 'serif', 
+           fontface='italic', color='darkred', size=5) +
+  annotate('text',x =4, y=60, label ='Group2', family = 'serif',
+           fontface='italic', color='darkred', size=5)
+
+# boundary labels
+p + annotate('text', x=-Inf, y=Inf, label='Top Left', vjust=1.5, hjust=0) +
+  annotate('text', y=-Inf, x=mean(range(faithful$eruptions)), label='Bottom Mid', vjust=-1)
+
+# Mathematical formula, treat with rules for expressions
+ggplot(data.frame(x=c(-3,3)), aes(x=x)) + stat_function(fun=dnorm) +
+  annotate('text', x=0, y=.3, parse=T, size=4,
+             label="'Function:' * y==frac(1,sqrt(2*pi))*e^{-x^2/2}")
+
+# adding lines to plots
+p <- ggplot(heightweight, aes(x=ageYear, y=heightIn, color=sex)) + geom_point() 
+# add horz & vertical lines
+p+geom_hline(yintercept=60) + geom_vline(xintercept=14)
+p + geom_abline(intercept=37.4, slope=1.75)
+
+# choose x y intercepts from data frame
+# library(plyr)
+hwt_summary <- ddply(heightweight, 'sex', summarize, heightIn=mean(heightIn))
+p + geom_hline(data = hwt_summary, aes(yintercept=heightIn, color=sex, linetype='dashed'))
+
+# for factor axis
+pg <- ggplot(PlantGrowth, aes(x=group, y=weight)) + geom_point()
+pg + geom_vline(xintercept=2)
+pg + geom_vline(xintercept=which(levels(PlantGrowth$group)=='ctrl'))
+
+# Line segments & arrows
+ber <- subset(climate, Source=='Berkeley') 
+p <- ggplot(ber, aes(x=Year, y=Anomaly10y)) + geom_line()
+p + annotate(geom='segment', x=1950, xend= 1980, y=.25, yend=.25)
+
+library(grid) # for arrow
+p + geom_segment(x=1850, xend=1820, y=-.7, yend=-.95, color='blue', arrow=arrow()) +
+  geom_segment(x=1950, xend= 1980, y=.25, yend=.25, 
+               arrow=arrow(ends='both', angle=90, length=unit(.2, 'cm')))
+# shaded rect
+p + annotate('rect', xmin=1900, xmax=1950, ymin=-1, ymax=1, fill='blue', alpha=.1)
+
+# hightlight one set of values, hack by creating new col
+pg <- PlantGrowth
+pg$hl <- 'no'
+pg$hl[pg$group=='trt2'] <- 'yes'
+ggplot(pg, aes(x=group, y=weight, fill=hl)) + geom_boxplot(alpha=.2, width=.5) +
+  scale_fill_manual(values=c('grey60', 'orange'), guide=F)
+# simpler way to specify for each group
+ggplot(pg, aes(x=group, y=weight, fill=group)) + geom_boxplot(alpha=.2, width=.5) +
+  scale_fill_manual(values=c('grey60', 'grey60', 'orange'), guide=F)
+
+# Adding error bars
+library(gcookbook)
+ce <- subset(cabbage_exp, Cultivar=='c39')
+ggplot(ce, aes(x=Date, y=Weight)) + 
+  geom_col(fill='white', color='black') +
+  geom_errorbar(aes(ymin=Weight-se, ymax=Weight+se), width=.2)
+
+ggplot(ce, aes(x=Date, y=Weight)) + 
+  geom_line(aes(group=1)) + geom_point(size=4) +
+  geom_errorbar(aes(ymin=Weight-se, ymax=Weight+se), width=.2)
+
+# working with full data set
+ggplot(cabbage_exp, aes(x=Date, y=Weight, fill=Cultivar)) +
+  geom_col(position='dodge')+ 
+  geom_errorbar(aes(ymin=Weight-se, ymax=Weight+se), width=.2, position='dodge')
+
+# dodge width is different for errorbar, need to specify manually
+
+ggplot(cabbage_exp, aes(x=Date, y=Weight, fill=Cultivar)) +
+  geom_col(position='dodge')+ 
+  geom_errorbar(aes(ymin=Weight-se, ymax=Weight+se), width=.2, 
+                position=position_dodge(.9))
+
+# plotting on lines
+pd <- position_dodge(.3)
+ggplot(cabbage_exp, aes(x=Date, y=Weight, color=Cultivar)) + 
+  geom_errorbar(aes(ymin=Weight-se, ymax=Weight+se), color='black',  width=.2) +
+  geom_point(size=4) + geom_line( aes(group=Cultivar))
+
+# adding annotations to facets
+p <- ggplot(mpg, aes(x=displ, y=hwy)) + geom_point() + facet_grid(.~drv)
+# label df for each facet
+f_labels <- data.frame(drv=c('4', 'f', 'r'), label=c('4wd', 'front', 'rear')) # does not work for drv = mpg$drv
+p +annotate('text', x=6, y=42, label='label text') # same text
+p +geom_text(data=f_labels, aes(label=label), x=6, y=42)
+
+## Chapter 8
+
+
+
+
+
+
