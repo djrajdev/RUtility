@@ -821,10 +821,186 @@ f_labels <- data.frame(drv=c('4', 'f', 'r'), label=c('4wd', 'front', 'rear')) # 
 p +annotate('text', x=6, y=42, label='label text') # same text
 p +geom_text(data=f_labels, aes(label=label), x=6, y=42)
 
-## Chapter 8
+## Chapter 8 - AXis
+data("PlantGrowth")
+# flip the axis, and reverse the labels to start from origin to up
+ggplot(PlantGrowth, aes(x=group, y=weight)) + geom_boxplot() +
+  coord_flip()
 
+ggplot(PlantGrowth, aes(x=group, y=weight)) + geom_boxplot() +
+  coord_flip() + scale_x_discrete(limits=rev(levels(PlantGrowth$grou[])))
 
+# setting the limits
+p <- ggplot(PlantGrowth, aes(x=group, y=weight)) + geom_boxplot()
+p
+p + ylim(0, max(PlantGrowth$weight))
 
+# ylim is parameter from scale_y_continuous, do not use both together
+# small ylim will clip the data, use coord transformations to avoid
+p + scale_y_continuous(limits=c(0,10), breaks=NULL)
+p
+p + scale_y_continuous(limits=c(5.5,10))
+p + coord_cartesian(ylim=c(5.5,10))
 
+# use expand_limit to expand to include point
+p + expand_limits(y=0)
 
+# reverse axis & set custom limits inside
+p + scale_y_reverse(limits=c(10,0)) # note limits are in reverse order
 
+# for discrete manually change order or show only subset
+p + scale_x_discrete(limits=c('trt1', 'ctrl', 'trt2'))
+p + scale_x_discrete(limits=c('trt1', 'trt2'))
+# use reverse
+p + scale_x_discrete(limits=rev(levels(PlantGrowth$group)))
+
+# fix the scaling of axis
+library(gcookbook) # for dataset
+g <- ggplot(marathon, aes(x=Half, y=Full)) + geom_point()
+g + coord_fixed()
+
+# keeping same tick breaks
+g + coord_fixed() +
+  scale_x_continuous(breaks=seq(0, 420, 30)) +
+  scale_y_continuous(breaks=seq(0, 420, 30))
+
+# expand half marathon to be double full marathon
+g + coord_fixed(1/2) +
+  scale_x_continuous(breaks=seq(0, 420, 15)) +
+  scale_y_continuous(breaks=seq(0, 420, 30))
+
+# setting breaks in scale decides where to keep tick marks
+p
+p + scale_y_continuous(breaks=c(3.75, 4.0, 4.25, 4.5, 4.6 , 5.25))
+p + scale_y_continuous(breaks=seq(3,8,.25))
+
+# setting limits plots the points, breaks plots the label
+p + scale_x_discrete(limits=c('trt1', 'trt2'), breaks='trt2')
+
+# removing labels, ticks, any marking
+p
+p + theme(axis.text.y = element_blank())
+p + theme(axis.text.y= element_blank(), axis.ticks.y = element_blank())
+p + scale_y_continuous(breaks=NULL)
+
+# changing the tet of labels
+hwp <- ggplot(heightweight, aes(x=ageYear, y=heightIn)) + geom_point()
+hwp
+hwp + scale_y_continuous(breaks=c(50,56,60,66,72),
+                         labels=c('tiny', 'short','medium', 'tallish', 'tall'))
+# format the labels differently
+formatter <- function(x) {
+  foot <- floor(x/12)
+  inches <- x %% 12
+  return(paste(foot, "'", inches, "\"", sep=""))
+}
+formatter(56:64)
+hwp+scale_y_continuous(labels=formatter)
+# cusotmize breaks for new formatter
+hwp + scale_y_continuous(breaks=c(50,56,60,66,72), labels=formatter)
+
+# library scales has other formatters like dollar amount, scientific etc
+
+# change appearance of tick labels
+p
+p + coord_fixed(3) + scale_x_discrete(breaks=levels(PlantGrowth$group), 
+                     labels=c('control', 'treatment1', 'treatment2'))
+
+p + coord_fixed(3) + scale_x_discrete(breaks=levels(PlantGrowth$group), 
+                                      labels=c('control', 'treatment1', 'treatment2')) +
+  theme(axis.text.x = element_text(angle=90, hjust=1, vjust=1))
+p + coord_fixed(3) + scale_x_discrete(breaks=levels(PlantGrowth$group), 
+                                      labels=c('control', 'treatment1', 'treatment2')) +
+  theme(axis.text.x = element_text(angle=30, hjust=1, vjust=1))
+# hjust goes from 0 to 1 for left, center, right, vjust gots from 0 to 1 for top mid bottom
+
+# changing other formatting for text
+p + theme(axis.text.x = element_text(family='Times', color='darkred', size=rel(1.3), 
+                                     face='bold'))
+
+# change the axis label
+hwp
+hwp+ xlab('Age in years')
+hwp + labs(x='Age in Years', y='Height in Inches')
+
+# equivalently
+hwp + scale_x_continuous(name='Age in Years')
+hwp + scale_x_continuous(name='Age\n(Years)')
+
+# hiding axis label
+hwp + theme(axis.title.x = element_blank())
+hwp + xlab('')
+
+# changing orientation for y axis
+hwp + ylab('Height\n(Inches)') +
+  theme(axis.title.y = element_text(size=10, color='darkred', face='bold'))
+hwp + ylab('Height\n(Inches)') +
+  theme(axis.title.y = element_text(angle=0,size=10, color='darkred', face='bold', vjust=.5))
+
+# changing plot borders
+hwp
+hwp+ theme_bw()
+hwp + theme_bw() + 
+  theme(panel.border=element_blank(),
+        axis.line=element_line(color='black', size=5))
+# full overlap at origin
+hwp+ theme_bw() +
+  theme(panel.border = element_blank(),
+        axis.line = element_line(size=4, color='black', lineend='square'))
+
+library(MASS) # for dataset
+an <- ggplot(Animals, aes(x=body, y=brain, label=rownames(Animals))) + 
+  geom_text(size=3)
+an
+an + scale_x_log10()
+an + scale_x_log10() + scale_y_log10()
+# equivalently
+ggplot(Animals, aes(x=log10(body), y=log10(brain), label=rownames(Animals))) + geom_text(size=3)
+# custom breaks
+an + scale_x_log10(breaks=10^(-1:5)) + scale_y_log10(breaks=10^(1:3))
+# fix formatting
+library(scales)
+an + scale_x_log10(breaks=10^(-1:5),
+                   labels=trans_format('log10', math_format(10^.x))) + 
+  scale_y_log10(breaks=10^(1:3))
+# change axis type, so x axis uses natural log
+an + scale_x_continuous(trans= log_trans(),
+                        breaks= trans_breaks('log', function(x) exp(x)),
+                        labels=trans_format('log', math_format(e^.x))) +
+  scale_y_log10()
+
+# log axis are mostly used in financial data
+ggplot(aapl, aes(x=date, y=adj_price)) + geom_line()
+ggplot(aapl, aes(x=date, y=adj_price)) + geom_line() + scale_y_log10()
+
+# adding ticks for log axis
+an + scale_x_log10() + scale_y_log10()
+an + scale_x_log10() + scale_y_log10() + annotation_logticks()
+
+# fixing the panel to line with ticks
+an + annotation_logticks() +
+  scale_x_log10(breaks= trans_breaks('lo<- ggplot(wind, aes( g10', function(x) 10^x),
+                labels = trans_format('log10', math_format(10^.x)),
+                minor_breaks=log10(5)+ -2:5) + 
+  scale_y_log10(breaks= trans_breaks('log10', function(x) 10^x),
+                labels = trans_format('log10', math_format(10^.x)),
+                minor_breaks=log10(5)+ -1:3)
+
+wnd <- ggplot(wind, aes(x=DirCat, fill=SpeedCat)) + 
+  geom_histogram(binwidth=15, color='black', size=.25)
+wnd
+wnd + coord_polar()
+wnd + coord_polar() + scale_x_continuous(limits=c(0,360))
+wnd + coord_polar() + scale_x_continuous(limits=c(0,360)) +
+  guides(fill=guide_legend(reverse=T)) + scale_fill_brewer() +
+  scale_x_continuous(limits=c(0,360), breaks=seq(0,360,45), minor_breaks = seq(0,360,15))
+
+# page 201 to 211 skipped
+
+# Chapter 9 Controlling the overall appearance of a graph
+# changing title
+p <- ggplot(heightweight, aes(x=ageYear, y=heightIn)) + geom_point()
+p + ggtitle('Height Weight\nof School children')
+# move it 
+p + ggtitle('Height Weight\nof School children') +
+  theme(plot.title = element_text(hjust=.5))
